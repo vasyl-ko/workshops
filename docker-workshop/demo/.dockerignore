@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+__pycache__
+*.egg-info
+*.pyc
+.idea
+.vscode
+Dockerfile*
+*.Dockerfile
+compose*.yaml
+README.md
+data/

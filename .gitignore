@@ -1,0 +1,9 @@
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+docker-workshop/demo/scratch/busybox
+docker-workshop/demo/data/

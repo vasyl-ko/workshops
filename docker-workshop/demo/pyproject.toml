@@ -1,0 +1,23 @@
+[project]
+name = "workshop-notes"
+version = "0.1.0"
+description = "Docker workshop demo API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "psycopg[binary]==3.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "httpx==0.28.1",
+]
+
+[tool.uv]
+# This is an app, not an installable package — uv sync installs only the deps.
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

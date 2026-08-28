@@ -1,0 +1,1444 @@
+<meta charset="utf-8">
+<title>Docker for the Team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<!-- ============================================================
+  EDIT YOUR SLIDES in the <script type="text/markdown"> block below.
+  Syntax:
+    ---                    new slide (on its own line)
+    ## Section | Title     slide header (Section shows in the footer;
+                           empty Section is fine: "## | Title")
+    @eyebrow Text          override the small label above the title
+    @demo LIVE DEMO 1      demo slide: green badge, centered
+    @hero                  big centered title slide
+    - bullet               lists; **bold**, *italic*, `code` work anywhere
+    ~ text                 grey side-note paragraph
+    > Tag line             amber "gotcha" box: first line is the label,
+    > body text            following > lines are the body
+    | a | b |              tables (with a |---|---| separator row)
+    ```                    terminal block ("```sm" = smaller font);
+                           inside: "$ " colors the prompt, "#..." is a
+                           grey comment, [[text]] highlights amber
+    :::cols  ...  :::      columns, separated by a ||| line
+    :::card !good Title    a card (color: !good / !bad / !accent / !warm)
+    :::html  ...  :::      raw HTML passthrough (the SVG diagrams)
+  Inline HTML like <span class="warm">text</span> also works.
+  Save the file, reload the browser tab. That's the whole build step.
+============================================================ -->
+
+<script type="text/markdown" id="deck">
+## | Docker
+@hero
+@eyebrow Team Workshop
+
+From *“works on my machine”* to shipping the machine.
+
+~ slides + live demos
+
+---
+## | On this call
+@eyebrow Agenda
+
+:::cols
+:::card <span class="accent">1</span> · Fundamentals <span class="muted">~15 min</span>
+Why containers exist, what a container actually is — vs VMs, vs real servers — and how images relate to containers.
+:::
+:::card <span class="accent">2</span> · Building images <span class="muted">~20 min</span>
+What an image really is — layers, tarballs — then Dockerfiles, caching, multi-stage, whiteouts, dive.
+:::
+:::card <span class="accent">3</span> · Docker run in practice <span class="muted">~15 min</span>
+What `docker run` really does, then ports, env vars, volumes, networks — wiring a real two-container stack by hand.
+:::
+:::card <span class="accent">4</span> · Debugging & ops <span class="muted">~20 min</span>
+The toolbox for when it breaks — and it will break (on purpose). Q&A.
+:::
+:::
+
+~ Docker Compose — the tool that tames what section 3 builds by hand — got its own follow-up workshop.
+
+---
+
+## | Fundamentals
+@hero
+@eyebrow Section 1
+
+Why containers exist, what a container actually is — vs VMs, vs real servers — and how images relate to containers.
+
+---
+## 1 · Fundamentals | “Works on my machine”
+
+- Your app doesn’t run alone — it needs a **Python version**, system libraries, env vars, a database, an OS with particular behavior.
+- Every machine drifts: laptops ≠ CI ≠ production. Onboarding an intern takes a day of “install these 12 things”.
+- Virtualenvs solve *one layer* (Python packages). Nothing pins the rest.
+
+> The idea
+> Stop shipping code and a README of hopes. Ship the **entire runtime environment** as one artifact that runs identically everywhere.
+
+---
+## 1 · Fundamentals | Containers vs virtual machines
+
+:::html
+<div style="overflow-x:auto;">
+<svg viewBox="0 0 720 300" style="max-width: 46em; width:100%;" role="img" aria-label="Diagram comparing VM stack with guest OS per VM against container stack sharing one kernel">
+  <text x="155" y="22" text-anchor="middle" class="lbl" font-weight="600">Virtual machines</text>
+  <rect x="20" y="250" width="270" height="34" rx="6" fill="#1C2C40" stroke="#24384F"/>
+  <text x="155" y="272" text-anchor="middle" class="lbl">Hardware + Host OS</text>
+  <rect x="20" y="212" width="270" height="30" rx="6" fill="#152232" stroke="#24384F"/>
+  <text x="155" y="232" text-anchor="middle" class="sm">Hypervisor</text>
+  <g>
+    <rect x="20" y="40" width="128" height="164" rx="6" fill="#152232" stroke="#4CC2FF" stroke-opacity="0.4"/>
+    <text x="84" y="66" text-anchor="middle" class="sm">App A</text>
+    <text x="84" y="92" text-anchor="middle" class="sm">Libs</text>
+    <rect x="32" y="110" width="104" height="76" rx="4" fill="#1C2C40"/>
+    <text x="84" y="146" text-anchor="middle" class="sm">Guest OS</text>
+    <text x="84" y="166" text-anchor="middle" class="sm">(GBs, minutes)</text>
+  </g>
+  <g>
+    <rect x="162" y="40" width="128" height="164" rx="6" fill="#152232" stroke="#4CC2FF" stroke-opacity="0.4"/>
+    <text x="226" y="66" text-anchor="middle" class="sm">App B</text>
+    <text x="226" y="92" text-anchor="middle" class="sm">Libs</text>
+    <rect x="174" y="110" width="104" height="76" rx="4" fill="#1C2C40"/>
+    <text x="226" y="146" text-anchor="middle" class="sm">Guest OS</text>
+    <text x="226" y="166" text-anchor="middle" class="sm">(GBs, minutes)</text>
+  </g>
+  <text x="565" y="22" text-anchor="middle" class="lbl" font-weight="600">Containers</text>
+  <rect x="430" y="250" width="270" height="34" rx="6" fill="#1C2C40" stroke="#24384F"/>
+  <text x="565" y="272" text-anchor="middle" class="lbl">Hardware + Host OS (one kernel)</text>
+  <rect x="430" y="212" width="270" height="30" rx="6" fill="#152232" stroke="#24384F"/>
+  <text x="565" y="232" text-anchor="middle" class="sm">Docker Engine</text>
+  <g>
+    <rect x="430" y="120" width="82" height="84" rx="6" fill="#152232" stroke="#4CC2FF"/>
+    <text x="471" y="152" text-anchor="middle" class="sm">App A</text>
+    <text x="471" y="172" text-anchor="middle" class="sm">Libs</text>
+  </g>
+  <g>
+    <rect x="524" y="120" width="82" height="84" rx="6" fill="#152232" stroke="#4CC2FF"/>
+    <text x="565" y="152" text-anchor="middle" class="sm">App B</text>
+    <text x="565" y="172" text-anchor="middle" class="sm">Libs</text>
+  </g>
+  <g>
+    <rect x="618" y="120" width="82" height="84" rx="6" fill="#152232" stroke="#4CC2FF"/>
+    <text x="659" y="152" text-anchor="middle" class="sm">App C</text>
+    <text x="659" y="172" text-anchor="middle" class="sm">Libs</text>
+  </g>
+  <text x="565" y="90" text-anchor="middle" class="sm" fill="#7CE38B">MBs · milliseconds · no guest OS</text>
+</svg>
+</div>
+:::
+
+~ A VM virtualizes **hardware**; a container virtualizes the **operating system**. That’s why containers start in milliseconds and you can run dozens on a laptop.
+
+---
+## 1 · Fundamentals | A container is just a process
+
+- Not a mini-VM. It’s a **normal Linux process** on your machine — you can see it in `ps` on the host.
+- The kernel wraps it in **namespaces**: its own filesystem view, network stack, process tree, hostname.
+- And meters it with **cgroups**: limits on CPU and memory.
+- Isolation is the illusion; the kernel is shared.
+
+> Consequences you’ll feel
+> Container stops when its main process (PID 1) exits · no Linux kernel on macOS/Windows → Docker Desktop runs a hidden Linux VM · a container is *disposable by design*.
+
+---
+## 1 · Fundamentals | A container is not a little server
+@eyebrow 1 · Fundamentals · deep dive
+
+| | real machine / VM | container |
+|---|---|---|
+| kernel | its own | borrowed from the host |
+| boot | firmware → kernel → init (systemd) → dozens of services | none — just `exec` your process as PID 1 |
+| processes | sshd, cron, log daemons, your app | your app. That’s it. (ideally) |
+| get in | ssh | `docker exec` |
+| logs | /var/log, journald | stdout/stderr → `docker logs` |
+| disk | persistent by default | ephemeral by default; volumes opt in |
+
+> Deep nugget · PID 1
+> Your process runs as PID 1, a role normally played by init — so default signal handling is off (no default SIGTERM action) and nobody reaps zombies. If `docker stop` hangs 10s then kills: that’s this. Fixes: `--init` flag, or an entrypoint that handles signals (uvicorn does).
+
+---
+## 1 · Fundamentals | Images vs containers
+
+:::cols
+:::card !accent Image
+- Read-only **template**: filesystem + metadata (env, default command)
+- Built once, shared via a registry (Docker Hub, ECR, …)
+- Like a **class** — or a frozen meal
+:::
+|||
+:::card !good Container
+- A **running instance** of an image + a thin writable layer
+- Start, stop, delete — cheap and disposable
+- Like an **object** — the meal, heated and half-eaten
+:::
+:::
+
+One image → many containers. Delete a container, the image is untouched. <span class="warm">Anything written inside a container dies with it</span> — that’s a feature, and volumes (the Compose workshop) are the answer.
+
+---
+## 1 · Fundamentals | First contact
+@demo LIVE DEMO 1
+
+```
+$ docker run -it --rm python:3.12-slim python
+# a Python REPL, on a machine that doesn't have this Python installed
+$ docker run -d -p 8000:80 --name web nginx
+$ docker ps                     # the container is a process with a name
+$ curl localhost:8000           # nginx, from inside the container
+$ docker stop web
+$ docker ps                     # empty!
+$ docker ps -a                  # …but the corpse is here — Exited (0)
+$ docker rm web
+```
+
+~ Watch for: pull-once-then-instant starts · `ps` vs `ps -a` · nothing installed on the host.
+
+---
+
+## | Building images
+@hero
+@eyebrow Section 2
+
+What an image really is — layers, tarballs — then Dockerfiles, caching, multi-stage, whiteouts, dive.
+
+---
+## 2 · Building images | The Dockerfile
+
+```
+[[FROM]] python:3.12-slim   # start from a base image
+[[WORKDIR]] /code           # cd (and mkdir -p)
+[[COPY]] --from=ghcr.io/astral-sh/uv:0.7.19 /uv /bin/uv
+[[COPY]] pyproject.toml uv.lock ./  # host → image
+[[RUN]] uv sync --frozen    # install exactly the lockfile
+[[COPY]] app/ app/
+[[CMD]] ["uvicorn", "app.main:app", …]
+```
+
+- A build script where **every instruction creates a layer**
+- `RUN` executes *at build time*; `CMD` is the default command *at run time* — the classic mix-up
+- Built with `docker build -t name:tag .` — and that `.` is the **build context**, which deserves its own slide →
+
+---
+## 2 · Building images | The build context
+
+The `.` in `docker build .` is not “where the Dockerfile lives” — it’s **which files the builder is allowed to see**.
+
+```
+$ docker build --progress=plain -t notes:v2 .
+#              raw daemon logs instead of the collapsing TTY view
+=> [internal] load build context
+=> => transferring context: 2.1kB     # ← your folder, packed up and SENT
+```
+
+- `docker build` never reads your disk directly: the client **tars the context directory and ships it** to the builder — that’s the “transferring context” line in every build
+- `COPY` can only reach files **inside** the context: `COPY ../secrets.env` fails by design — nothing outside the folder you named can end up in an image
+- What ships is what your instructions **can reach**: BuildKit transfers only the paths your `COPY`s reference — but the moment a Dockerfile says `COPY . .`, that’s the *entire* context, stray `data/` and `.git` included (proof in a live demo later this section)
+- `.dockerignore` trims what gets shipped — that’s why it speeds up builds and stops junk from busting the cache (it gets its own slide later this section)
+- The Dockerfile is just read from the context root by default — `-f path/to/Dockerfile` picks another one, the context stays whatever you passed
+
+> Smell test
+> A build that hangs on “transferring context” for seconds — or a context measured in MB for a small app — means the context is dragging junk along. Check `.dockerignore` first.
+
+---
+## 2 · Building images | Base images — and their slim versions
+
+`FROM` picks your starting filesystem — and it’s the single biggest lever on image size, before any Dockerfile cleverness. The same Python, three wrappings (sizes measured on this machine):
+
+| tag | what’s inside | size |
+|---|---|---|
+| python:3.12 | full Debian: compilers, headers, git — the kitchen sink, “just in case” | 1.62 GB |
+| python:3.12-slim | the **same Debian**, stripped to what running Python needs | 205 MB |
+| python:3.12-alpine | different OS: Alpine + musl libc — tiny, with caveats | 79.5 MB |
+
+- The full image exists for convenience: things compile without thought. You pay ~1.4 GB for tools your app never runs
+- **slim is the team default for Python**: same distro, same glibc, every wheel works — just smaller
+- alpine uses **musl**, not glibc: some Python wheels don’t ship musl builds and compile from source (slow) or misbehave — measure before adopting
+- Pin the distro release too when reproducibility matters: `python:3.12-slim-bookworm`
+
+---
+## 2 · Building images | v1 vs v2: the base image gap
+@demo LIVE DEMO 2 · BASE IMAGES
+
+```
+$ grep ^FROM v1.Dockerfile v2.Dockerfile
+v1.Dockerfile:FROM python:3.12
+v2.Dockerfile:FROM python:3.12-slim
+$ docker build --progress=plain -f v1.Dockerfile -t notes:v1 .
+#              plain = full daemon logs, step by step — nothing collapses
+$ docker build --progress=plain -f v2.Dockerfile -t notes:v2 .
+$ docker images notes            # 1.72 GB vs 319 MB — the SAME app
+$ docker images python           # the bases themselves: 1.62 GB vs 205 MB
+```
+
+~ Watch for: ~1.4 GB of difference explained almost entirely by the `FROM` line. v2 still has v1’s naive layer order — fixing *that* is the next few slides.
+
+---
+## 2 · Building images | Layer cache: order is everything
+
+:::cols
+:::card !bad v2 — cache buster
+```
+COPY . .
+RUN uv sync
+```
+Any code edit changes the `COPY` layer → cache invalidated **from that line down** → every dependency reinstalls. Every. Single. Build.
+:::
+|||
+:::card !good v2.1 — cache friendly
+```
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen
+COPY app/ app/
+```
+Code edits only invalidate the last `COPY`. Dependencies reinstall **only when the lockfile changes**. Rebuilds drop from minutes to ~1s.
+:::
+:::
+
+~ Rule: order instructions from **least → most frequently changing**.
+
+---
+## 2 · Building images | The cache race
+@demo LIVE DEMO 2 · CACHE RACE
+
+```
+# v2.1 = v2 with ONE change: the lockfile is copied and synced BEFORE the code
+$ grep -E '^(COPY|RUN)' v2.Dockerfile v2.1.Dockerfile
+$ docker build --progress=plain -f v2.1.Dockerfile -t notes:v2.1 .    # warm it once
+
+# touch the code, rebuild both — same base, same flags, only the ORDER differs:
+$ sed -i '' 's/Workshop Notes API/Workshop Notes API v2/' app/main.py
+$ time docker build --progress=plain -f v2.Dockerfile -t notes:v2 .     # re-syncs everything
+$ time docker build --progress=plain -f v2.1.Dockerfile -t notes:v2.1 . # CACHED — ~0.5s
+$ sed -i '' 's/Notes API v2/Notes API/' app/main.py   # undo the edit
+```
+
+~ Watch for: `CACHED` lines in the v2.1 output · near-identical images (319 vs 318 MB), ~6× rebuild gap even on this tiny app — and it grows with every dependency you add.
+
+---
+## 2 · Building images | ENTRYPOINT vs CMD
+
+Both say what runs at start — docker **concatenates them**: `ENTRYPOINT + CMD` = the command line.
+
+```
+ENTRYPOINT ["uv"]                # the fixed part — what this container IS
+CMD ["run", "uvicorn", "app.main:app"]   # default arguments — easily replaced
+
+$ docker run notes               # runs: uv run uvicorn app.main:app
+$ docker run notes --version     # runs: uv --version   ← your args REPLACED CMD
+$ docker run --entrypoint sh -it notes   # overriding the fixed part takes a flag
+```
+
+| | ENTRYPOINT | CMD |
+|---|---|---|
+| role | the executable — “what it is” | default arguments — “how, by default” |
+| overridden by | `--entrypoint` flag | anything typed after the image name |
+| alone | acts as the whole command | acts as the whole command |
+
+- App images usually need only `CMD` (ours do); `ENTRYPOINT` shines for **CLI-tool images** where the binary is fixed and users pass arguments
+- Official images often combine both: postgres runs an `ENTRYPOINT` init script whose last act is `exec "$CMD"`
+
+> Always use the exec form
+> `CMD ["uvicorn", …]` (JSON array), never `CMD uvicorn …` — the shell form wraps your app in `/bin/sh -c`, so **sh becomes PID 1**, signals never reach your app, and every `docker stop` hangs 10 s then kills. Same PID 1 story as section 1.
+
+---
+## 2 · Building images | .dockerignore — the forgotten file
+
+:::cols
+```
+.git
+.venv
+__pycache__
+*.pyc
+.idea
+```
+|||
+- `COPY . .` copies *everything* in the context: your `.git` history, your 500 MB virtualenv, editor junk
+- Bloats the image, slows the context upload, **busts the cache** on files that don’t matter
+- Can leak secrets (`.env`, keys) into image layers — layers are *forever*, even if a later layer deletes the file
+:::
+
+---
+## 2 · Building images | 120 MB you never asked to ship
+@demo LIVE DEMO 2 · DOCKERIGNORE
+
+```
+# a teammate adds a local dataset — gitignored, so nobody sees it in review
+$ mkdir -p data && dd if=/dev/urandom of=data/dataset.bin bs=1m count=120
+$ du -sh data/                                # 120M
+
+$ docker build --progress=plain -f v1.Dockerfile -t notes:v1 .
+# => transferring context: 125.87MB          ← COPY . . drags it in, every build
+$ docker images notes                        # v1: 1.72 GB → 1.98 GB. oops.
+
+$ docker build --progress=plain -f v2.1.Dockerfile -t notes:v2.1 .
+# => transferring context: 265B              ← v2.1's targeted COPYs never reach data/
+
+$ echo "data/" >> .dockerignore              # the real fix — protects EVERY Dockerfile
+$ docker build --progress=plain -f v1.Dockerfile -t notes:v1 .   # context tiny, image back to 1.72 GB
+```
+
+~ Watch for: **gitignored ≠ dockerignored** — invisible to review, shipped to the daemon · v2.1’s targeted COPYs dodge it by luck; `.dockerignore` fixes it by policy, for v1 and v2 too.
+
+---
+## 2 · Building images | Deleting a file doesn’t shrink the image
+@eyebrow 2 · Building images · deep dive
+
+Layers are **append-only diffs**. A later `RUN rm` doesn’t remove bytes — it adds a *whiteout marker* (`.wh.big.bin`) that hides the file at runtime. The bytes still ship in the earlier layer. Proof, from this repo:
+
+```
+FROM alpine:3.20                              #   ~8 MB
+RUN dd if=/dev/zero of=/big.bin bs=1M count=100  # +105 MB layer
+RUN rm /big.bin                               # +4.1 kB — the whiteout!
+# ls inside: no big.bin anywhere. docker images:
+notes:whiteout   [[119MB]]
+```
+
+- Fix 1: **clean up in the same layer** — `apt-get install … && rm -rf /var/lib/apt/lists/*` as *one* RUN
+- Fix 2: don’t create the junk — `uv sync --no-cache` (our v1 quietly ships <span class="warm">49 MB of uv cache</span>)
+- Fix 3: **multi-stage** — the nuclear option: a fresh image simply never sees the junk
+- Same physics is why a `RUN rm secret.key` is a security incident, not a cleanup
+
+---
+## 2 · Building images | Images are stacks of layers
+
+:::html
+<div style="overflow-x:auto;">
+<svg viewBox="0 0 700 250" style="max-width: 44em; width:100%;" role="img" aria-label="Image layers stacked, with a writable container layer on top">
+  <g>
+    <rect x="40" y="196" width="300" height="36" rx="6" fill="#1C2C40" stroke="#24384F"/>
+    <text x="60" y="219" class="sm">FROM python:3.12-slim</text>
+    <rect x="40" y="154" width="300" height="36" rx="6" fill="#1C2C40" stroke="#24384F"/>
+    <text x="60" y="177" class="sm">COPY pyproject.toml uv.lock ./</text>
+    <rect x="40" y="112" width="300" height="36" rx="6" fill="#1C2C40" stroke="#24384F"/>
+    <text x="60" y="135" class="sm">RUN uv sync --frozen</text>
+    <rect x="40" y="70" width="300" height="36" rx="6" fill="#1C2C40" stroke="#24384F"/>
+    <text x="60" y="93" class="sm">COPY app/ app/</text>
+    <rect x="40" y="22" width="300" height="36" rx="6" fill="#152232" stroke="#7CE38B" stroke-dasharray="5 4"/>
+    <text x="60" y="45" class="sm" fill="#7CE38B">container writable layer</text>
+    <text x="360" y="45" class="sm" fill="#7CE38B">← per container, ephemeral</text>
+    <text x="360" y="135" class="sm">← image layers: read-only,</text>
+    <text x="372" y="155" class="sm">cached, shared between images</text>
+  </g>
+  <text x="40" y="248" class="sm">Each Dockerfile instruction = one layer. Unchanged instruction (and everything above it in this stack) = reused from cache.</text>
+</svg>
+</div>
+:::
+
+Layers are content-addressed and **shared**: ten images on `python:3.12-slim` store that base *once*. This is also why instruction **order** decides your build speed — exactly what the cache race demonstrated.
+
+---
+## 2 · Building images | An image is just tarballs + JSON
+@eyebrow 2 · Building images · deep dive
+
+No magic format. `docker save` an image and untar it:
+
+
+```sm
+$ docker save notes:v3 | tar -t
+blobs/sha256/1cf6d7cb8acf…   # config JSON
+blobs/sha256/297b376ee6a7…   # layer (tar)
+blobs/sha256/2b48c98adf89…   # layer (tar)
+blobs/sha256/5464b19ed1ee…   # manifest: the parts list
+…
+index.json                   # entry point → manifest digest(s)
+manifest.json                # legacy docker-load equivalent
+oci-layout                   # {"imageLayoutVersion":"1.0.0"}
+```
+
+
+- **oci-layout**: a one-line version stamp — “this folder follows the **OCI (Open Container Initiative) Image Layout** spec”, the vendor-neutral standard docker, podman, containerd and registries all speak
+- **index.json**: the entry point — points (by digest) to the manifest blob(s); one index can carry several images or CPU architectures (that’s how multi-arch tags work)
+- **Manifest**: the parts list — config + layer digests in order (`manifest.json` is its legacy `docker load` twin)
+- **Config JSON**: env, default CMD, build history
+- **Each layer**: a plain tar of the *filesystem diff* that instruction made
+- Blob names are **sha256 of content** → identical layers dedupe everywhere: disk, registry, network — that’s the “Already exists” lines during a pull
+
+
+---
+## 2 · Building images | Reading `docker history`
+@eyebrow 2 · Building images · deep dive
+
+The image’s recipe, one row per layer — newest on top, base image at the bottom:
+
+```sm
+$ docker history notes:v2.1
+IMAGE          CREATED BY                               SIZE
+c32fa975eb99   CMD ["uvicorn" "app.main:app" …]         0B        # metadata only
+<missing>      COPY app/ app/                           24.6kB    # ← our code
+<missing>      ENV PATH=/code/.venv/bin:…               0B
+<missing>      RUN uv sync --frozen --no-dev …          [[48.6MB]]  # ← our deps
+<missing>      COPY pyproject.toml uv.lock ./           156kB
+<missing>      WORKDIR /code                            8.19kB
+<missing>      COPY /uv /bin/uv                         35.9MB    # ← uv itself
+<missing>      CMD ["python3"]                          0B        # ┐
+<missing>      RUN … apt-get install … python3.12 …     44.6MB    # ├ python:3.12-slim's
+<missing>      ENV PYTHON_VERSION=3.12.14               0B        # ┘ own history
+```
+
+- Read **bottom-up** — that’s the order the instructions ran, and the base image’s own history is included (there is no hard boundary: your image *is* the base plus your rows)
+- **SIZE is what that layer added.** `0B` rows (`ENV`, `CMD`, `EXPOSE`) touch only the config JSON — they’re free
+- The big rows are your optimization targets — here <span class="warm">48.6 MB</span> of deps (plus 35.9 MB of uv itself) vs 24.6 kB of code, which is exactly why deps install *before* code in the cache ordering
+- `<missing>` is cosmetic: intermediate layers just aren’t separate tagged images on your machine — nothing is broken
+- `--no-trunc` shows the full commands when the `…` hides the interesting part
+
+---
+## 2 · Building images | The bottom of the stack: `scratch`
+@eyebrow 2 · Building images · deep dive
+
+Every `FROM` chain ends at `scratch`: a reserved name for the **empty image** — zero layers, zero bytes, no shell, no `ls`, no libc. It isn’t even pullable; it’s a keyword meaning “start from nothing”.
+
+:::cols
+```sm
+# how official base images are born —
+# debian's actual Dockerfile is just:
+FROM scratch
+ADD rootfs.tar.xz /    # a root filesystem
+CMD ["bash"]           # built outside docker
+
+# alpine: the same trick with
+# alpine-minirootfs-*.tar.gz
+```
+|||
+```sm
+# using it directly — ship ONE static
+# binary (replay: demo/scratch/):
+FROM scratch
+COPY busybox /busybox
+ENTRYPOINT ["/busybox","echo","hi"]
+
+$ docker run --rm scratch-test
+hello from scratch
+$ docker images scratch-test   # [[2.2MB]]
+```
+:::
+
+- Works only for **static binaries** (Go, Rust, musl builds): there’s no libc to link against — a dynamically linked binary dies at start with a confusing `no such file or directory` (it means the *linker* is missing, not your binary)
+- No shell also means no `docker exec` into it — debugging happens from the outside
+- The practical middle ground: **distroless** images — libc, CA certs, timezones included, still no shell or package manager
+- Turtles all the way down: every base image on Docker Hub bottoms out at a rootfs tarball sitting on `scratch`
+
+---
+## 2 · Building images | Layer anatomy, live
+@demo LIVE DEMO 2 · LAYERS
+
+```
+$ docker history notes:v2.1       # uv sync 48.6 MB · uv itself 35.9 MB · code 24.6 kB
+
+# whiteouts: delete a file, image doesn't shrink
+$ docker build --progress=plain -f whiteout.Dockerfile -t notes:whiteout .
+$ docker images notes:whiteout  # 119 MB — alpine is ~8 MB and big.bin was DELETED
+$ docker history notes:whiteout # dd keeps its 105 MB; the rm is a 4.1 kB whiteout
+
+$ docker save notes:v3 | tar -t | head   # an image is tarballs + JSON, no magic
+```
+
+~ Watch for: reading history bottom-up · the 4.1 kB `rm` layer next to the 105 MB it failed to remove.
+
+---
+## 2 · Building images | dive — an x-ray for images
+@eyebrow 2 · Building images · deep dive
+
+:::cols
+```sm
+$ brew install dive
+$ dive notes:v1
+# left: layers + their sizes
+# right: the file tree, with this
+#   layer's additions highlighted
+# Tab to switch panes, Ctrl+U to
+#   show only changed files
+$ CI=true dive --ci notes:v1
+# headless mode — fail CI builds
+# that waste too many bytes
+```
+|||
+- Answers “**which instruction added these 200 MB?**” — click a layer, see exactly which files it wrote
+- Flags **wasted bytes**: files duplicated or deleted across layers (whiteouts show up instantly)
+- Honest caveat: its “efficiency %” only counts *cross-layer* waste — v1 scores 99% while being 1.7 GB. The score is not the point; **browsing where bytes live is** (go find `/root/.cache` in v1)
+:::
+
+---
+## 2 · Building images | X-ray and scratch
+@demo LIVE DEMO 2 · OPTIONAL
+
+```
+$ dive notes:v1                 # Tab: file tree · Ctrl+U: this layer's files
+# find /root/.cache in the uv-sync layer — 49 MB shipped for nothing
+$ CI=true dive --ci notes:v1    # headless mode — the CI guardrail
+
+# FROM scratch, live (files in demo/scratch/)
+$ cd scratch
+$ C=$(docker create busybox:musl) && docker cp $C:/bin/busybox . && docker rm $C
+$ docker build --progress=plain -f scratch.Dockerfile -t scratch-test .
+$ docker run --rm scratch-test  # hello from scratch — a 2.2 MB image
+```
+
+~ Stretch material — run it when ahead of schedule. Encore: repeat with plain `busybox` (dynamically linked) and watch scratch refuse it.
+
+---
+## 2 · Building images | Multi-stage builds
+
+```
+[[FROM]] python:3.12-slim [[AS builder]]   # stage 1: heavy lifting
+COPY --from=ghcr.io/astral-sh/uv:0.7.19 /uv /bin/uv
+WORKDIR /code
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev           # → /code/.venv
+
+[[FROM]] python:3.12-slim               # stage 2: fresh, clean image
+WORKDIR /code
+[[COPY --from=builder]] /code/.venv .venv  # the deps — without uv itself
+COPY app/ app/
+```
+
+- Build tools, installers, caches stay in the builder stage — **only the result ships**: here the final image has the `.venv` but no uv binary at all (verified: v2.1 318 MB → v3 265 MB)
+- Dramatic when there’s heavy tooling to leave behind (Go: ~800 MB toolchain → ~10 MB image; C extensions, node_modules builds)
+- Same idea powers “build frontend with node, serve with nginx” images
+
+---
+## 2 · Building images | Multi-stage, level 2
+@eyebrow 2 · Building images · deep dive
+
+One real-world Dockerfile: shared deps, tests that never ship, and a frontend built by a toolchain the final image never sees:
+
+:::cols
+```sm
+FROM python:3.12-slim [[AS deps]]          # ① the expensive part, done once
+COPY --from=ghcr.io/astral-sh/uv:0.7.19 /uv /bin/uv
+WORKDIR /code
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev          # prod deps only → .venv
+
+FROM [[deps]] AS test                      # ② builds ON TOP of deps
+RUN uv sync --frozen                   # adds the dev group: pytest, ruff…
+COPY app/ tests/ ./
+RUN .venv/bin/pytest                   # red tests = failed build. never ships
+
+FROM node:22-slim [[AS frontend]]          # ③ a different toolchain entirely
+COPY ui/ .
+RUN npm ci && npm run build            # → dist/
+
+FROM python:3.12-slim                  # ④ runtime: only the results ship
+WORKDIR /code
+COPY [[--from=deps]] /code/.venv .venv     # prod deps — no uv, no dev group
+COPY [[--from=frontend]] dist/ static/
+COPY app/ app/
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
+```
+|||
+```sm
+$ docker build [[--target test]] .   # CI: stop at ②, test, ship nothing
+$ docker build -t app .              # prod: ② is skipped, no node inside
+```
+
+- Stages can start **from earlier stages** — `test` reuses `deps`, so dependencies install once
+- **Dev dependencies never reach prod**: the `dev` group from pyproject.toml installs only inside the `test` stage (plain `uv sync` includes it; `--no-dev` skips it), and runtime copies `.venv` from `deps` — not from `test` — so pytest/ruff add zero bytes to the shipped image
+- `--target` picks where to stop: **one Dockerfile drives both CI and prod**
+- BuildKit **skips stages the target doesn’t need** and builds independent ones in parallel — the test stage costs prod builds nothing
+- `COPY --from=` also accepts any *image* — that’s exactly how uv gets in above, and the same trick borrows single files from anywhere: `COPY --from=nginx:1.27 /etc/nginx/nginx.conf ./`
+:::
+
+---
+## 2 · Building images | Multi-stage, measured
+@demo LIVE DEMO 2 · MULTI-STAGE
+
+```
+$ docker build --progress=plain -f v3.Dockerfile -t notes:v3 .
+$ docker images notes            # 1.7 GB → 318 MB → 265 MB — v3 left uv behind
+
+$ docker run --rm -d -p 8000:8000 --name api notes:v3 && curl localhost:8000
+$ docker stop api
+```
+
+~ Watch for: v3 smaller than v2 with zero effort at runtime — the uv binary and its bootstrap stayed in the builder stage.
+
+---
+## 2 · Building images | Tags vs digests
+
+Two ways to name the same image — one for humans, one for machines:
+
+- A **tag** is a **movable pointer** to an image: `notes:v2`, `python:3.12-slim` — repointable at any time, exactly like a git branch
+- The **digest** is the commit hash: `sha256:` of the image’s manifest — immutable, verifiable, never reused. The tag can point somewhere else tomorrow; the digest can’t
+
+```
+$ docker images --digests python:3.12-slim
+python  3.12-slim  sha256:7a8b475003c4…          # the tag's target TODAY
+
+FROM python:3.12-slim[[@sha256:7a8b475003c4…]]       # pin by digest: this build
+                                                 # can never silently change
+```
+
+---
+## 2 · Building images | Tags are mutable — the `:latest` lie
+
+- `:latest` is just the *default tag name*. It is **not** “the newest version” and it doesn’t auto-update
+- Your machine happily keeps a months-old `:latest` until you `docker pull`
+- Every tag has this problem, not just `:latest`: `python:3.12-slim` quietly repoints when the base is rebuilt with security patches — same name, different bytes
+- Whether that’s a feature (free security fixes) or a risk (unreviewed change) is a *choice* — make it consciously, per environment
+
+> Team rule of thumb
+> Pin versions everywhere reproducibility matters: `FROM python:3.12-slim` not `FROM python` (digest-pin when supply-chain rigor matters), a committed `uv.lock` (and `uv sync --frozen` so builds fail rather than drift), unique tags (git SHA) for deployed images.
+
+---
+## 2 · Building images | One image name, many CPUs
+
+An image is built **for an architecture** — and your laptop’s may not be your server’s:
+
+- Apple Silicon builds **linux/arm64** by default; most servers and CI runners are **linux/amd64**. Ship the wrong one and the container dies with `exec format error` — “works on my machine”, hardware edition
+- `docker build --platform linux/amd64` cross-builds via emulation (Rosetta/QEMU) — correct output, noticeably slower builds
+- Real multi-arch uses buildx: `docker buildx build --platform linux/amd64,linux/arm64 -t img --push` — one tag, one manifest **index** pointing at per-arch manifests (the same `index.json` from the tarballs slide!)
+- That’s why `docker pull python:3.12-slim` just works on both your Mac and CI — the registry serves each machine its own architecture automatically
+
+> Team rule of thumb
+> Build for prod’s platform in CI (native amd64 runners beat emulation), and treat the platform-mismatch WARNING on `docker run` as a deploy bug waiting to happen — not noise.
+
+---
+## 2 · Building images | Cross-building, live
+@demo LIVE DEMO 2 · PLATFORMS
+
+```
+$ docker image inspect notes:v2.1 --format '{{.Os}}/{{.Architecture}}'
+linux/arm64                          # built on this M-series Mac → arm64
+
+$ docker build --progress=plain --platform linux/amd64 -f v2.1.Dockerfile -t notes:amd64 .
+$ docker image inspect notes:amd64 --format '{{.Os}}/{{.Architecture}}'
+linux/amd64                          # same Dockerfile, different CPU target
+
+$ docker run --rm notes:amd64 python -c "import platform; print(platform.machine())"
+WARNING: image's platform (linux/amd64) does not match host (linux/arm64)
+x86_64                               # running x86 code on ARM — emulated, slower
+```
+
+~ Watch for: the cross-build pulling a *different* set of base layers · the run WARNING — on a real deploy that line means someone shipped the wrong architecture.
+
+---
+## 2 · Building images | Image checklist
+
+:::cols
+- <span class="good">✓</span> slim/alpine base, version-pinned
+- <span class="good">✓</span> dependencies installed *before* code is copied
+- <span class="good">✓</span> `.dockerignore` exists and covers .git / venv / caches
+- <span class="good">✓</span> multi-stage when there’s a build step
+|||
+- <span class="good">✓</span> non-root `USER` in the final stage
+- <span class="good">✓</span> one process per container
+- <span class="good">✓</span> config via env vars, never baked in
+- <span class="bad">✗</span> secrets in any layer, ever
+:::
+
+---
+
+## | Docker run in practice
+@hero
+@eyebrow Section 3
+
+Ports, env vars, volumes, networks — everything a real container needs, one flag at a time.
+
+---
+## 3 · Docker run in practice | Anatomy of `docker run`
+
+```
+docker run [[-it]] [[--rm]] [[-d]] [[-p 8000:8000]] [[-e KEY=val]] [[--name api]] image:tag  # cmd
+```
+
+| flag | meaning |
+|---|---|
+| -it | interactive terminal — for shells and REPLs |
+| --rm | delete the container when it exits (keep your machine clean) |
+| -d | detached — run in the background |
+| -p 8000:8000 | publish port — **host:container**, in that order |
+| -e KEY=val | set an environment variable (the 12-factor config channel) |
+| --name api | a human name instead of `eloquent_hopper` |
+
+---
+## 3 · Docker run in practice | What `docker run` actually does
+@eyebrow 3 · Docker run in practice · deep dive
+
+:::html
+<div style="overflow-x:auto;">
+<svg viewBox="0 0 740 290" style="max-width:48em; width:100%;" role="img" aria-label="Flow: CLI asks daemon, image pulled from registry if missing, filesystem assembled, process started">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8CA0B4"/>
+    </marker>
+  </defs>
+  <rect x="10" y="30" width="150" height="64" rx="8" fill="#152232" stroke="#24384F"/>
+  <text x="85" y="56" text-anchor="middle" class="lbl">① docker CLI</text>
+  <text x="85" y="76" text-anchor="middle" class="sm">docker run notes:v3</text>
+  <line x1="160" y1="62" x2="196" y2="62" stroke="#8CA0B4" marker-end="url(#arr)"/>
+  <rect x="200" y="30" width="160" height="64" rx="8" fill="#152232" stroke="#24384F"/>
+  <text x="280" y="56" text-anchor="middle" class="lbl">② daemon</text>
+  <text x="280" y="76" text-anchor="middle" class="sm">image here already?</text>
+  <line x1="280" y1="94" x2="280" y2="130" stroke="#FFB454" marker-end="url(#arr)"/>
+  <text x="290" y="118" class="sm" fill="#FFB454">no → PULL</text>
+  <rect x="180" y="134" width="200" height="86" rx="8" fill="#152232" stroke="#FFB454"/>
+  <text x="280" y="158" text-anchor="middle" class="lbl">registry</text>
+  <text x="280" y="178" text-anchor="middle" class="sm">manifest first, then only the</text>
+  <text x="280" y="194" text-anchor="middle" class="sm">layers you don’t have, in parallel</text>
+  <text x="280" y="212" text-anchor="middle" class="sm" fill="#FFB454">the ONLY slow step — network!</text>
+  <line x1="360" y1="62" x2="396" y2="62" stroke="#8CA0B4" marker-end="url(#arr)"/>
+  <rect x="400" y="30" width="160" height="64" rx="8" fill="#152232" stroke="#24384F"/>
+  <text x="480" y="50" text-anchor="middle" class="lbl">③ assemble fs</text>
+  <text x="480" y="68" text-anchor="middle" class="sm">stack RO layers (overlayfs)</text>
+  <text x="480" y="84" text-anchor="middle" class="sm">+ fresh writable layer</text>
+  <line x1="560" y1="62" x2="596" y2="62" stroke="#8CA0B4" marker-end="url(#arr)"/>
+  <rect x="600" y="30" width="130" height="64" rx="8" fill="#152232" stroke="#7CE38B"/>
+  <text x="665" y="50" text-anchor="middle" class="lbl">④ start</text>
+  <text x="665" y="68" text-anchor="middle" class="sm">namespaces, cgroups,</text>
+  <text x="665" y="84" text-anchor="middle" class="sm">exec PID 1</text>
+  <text x="480" y="130" class="sm" fill="#7CE38B">③ + ④ take milliseconds —</text>
+  <text x="480" y="148" class="sm" fill="#7CE38B">no copying, layers are reused in place</text>
+  <text x="10" y="255" class="sm">Every fresh machine pays the pull: CI runners, autoscaled nodes, new teammates’ laptops, every deploy.</text>
+  <text x="10" y="275" class="sm">A 1.7 GB image vs a 290 MB image is the difference the whole team feels daily — that was section 2.</text>
+</svg>
+</div>
+:::
+
+---
+## 3 · Docker run in practice | Ports: publishing to the host
+
+```
+docker run -p [[8000]]:8000 notes:v3
+#             host  :container — host first, always
+```
+
+- Containers get their own network stack — their ports are **invisible** until published
+- `-p 9000:8000` → app listens on 8000 inside, you hit `localhost:9000` outside. Two apps can both use “their” 8000
+- App must bind `0.0.0.0`, not `127.0.0.1` — inside the container, localhost means *the container*
+- `-p 127.0.0.1:5432:5432` publishes **to your machine only** — without the prefix, the port is open to your whole network. Databases in dev stacks deserve the prefix
+
+---
+## 3 · Docker run in practice | Env vars: config without rebuilds
+
+```
+$ docker run -e DEBUG=1 -e DATABASE_URL=postgresql://… notes:v2.1
+$ docker run --env-file .env notes:v2.1     # a file of KEY=val lines
+$ docker exec api env                     # what did it ACTUALLY get?
+```
+
+- Env is **the** config channel: one image, different env → dev, staging, prod. Never bake config into the image
+- Set at `docker run` time — changing a value means recreating the container, not rebuilding the image
+- Secrets ride env at runtime, **never** `COPY`d into layers (layers are forever — section 2)
+- Debug rule: what the app *sees* is what `docker exec <c> env` prints — not what your shell exports
+
+---
+## 3 · Docker run in practice | Volumes: data that survives
+
+```
+$ docker run -d --name db -v [[pgdata]]:/var/lib/postgresql/data postgres:16-alpine
+#                            named volume — created on first use, owned by docker
+$ docker run -v [[./app]]:/code/app notes:v2.1      # bind mount — your real folder, mirrored in
+$ docker volume ls
+$ docker volume inspect pgdata
+```
+
+- The container’s writable layer **dies with the container** — volumes are the opt-out
+- **Named volume** (`pgdata:`): docker-managed storage — for *state*: databases, uploads. Survives `docker rm`
+- **Bind mount** (`./app:`): a host folder mirrored inside — for *code*: edit in your editor, the container sees it instantly
+- Rule of thumb: **code in bind mounts, state in volumes**
+
+---
+## 3 · Docker run in practice | Networks: containers talk by name
+
+```
+$ docker network create demo
+$ docker run -d --name [[db]]  --network demo postgres:16-alpine
+$ docker run -d --name api --network demo \
+    -e DATABASE_URL=postgresql://workshop:workshop@[[db]]:5432/notes notes:v2.1
+```
+
+- Containers on the same user-defined **network** reach each other **by container name** — Docker runs an internal DNS
+- No published ports needed for container↔container traffic: `db:5432` works with nothing exposed to the host
+
+> Classic mistake
+> `localhost:5432` inside the api container is the *api container itself*, not your host, not the db. If code says localhost and it works on the host but not in Docker — this is why.
+
+---
+## 3 · Docker run in practice | The stack, by hand
+@demo LIVE DEMO 3 · A REAL STACK
+
+```
+$ docker network create demo
+$ docker run -d --name db --network demo -v pgdata:/var/lib/postgresql/data \
+    -e POSTGRES_USER=workshop -e POSTGRES_PASSWORD=workshop -e POSTGRES_DB=notes \
+    postgres:16-alpine
+$ docker run -d --name api --network demo -p 8000:8000 \
+    -e DATABASE_URL=postgresql://workshop:workshop@db:5432/notes notes:v2.1
+$ curl -X POST "localhost:8000/notes?text=by-hand" && curl localhost:8000/notes
+$ curl localhost:8000                    # "storage": "postgres" — one env var did that
+
+# the volume outlives the container:
+$ docker rm -f db                        # kill the database entirely
+$ docker run -d --name db --network demo -v pgdata:/var/lib/postgresql/data \
+    -e POSTGRES_USER=workshop -e POSTGRES_PASSWORD=workshop -e POSTGRES_DB=notes \
+    postgres:16-alpine
+$ curl localhost:8000/notes              # notes still there — pgdata survived
+```
+
+~ Leave this stack running — section 4 is going to break it.
+
+---
+## 3 · Docker run in practice | This doesn’t scale
+
+That demo took four commands and a paragraph of flags — and it’s a *tiny* stack:
+
+```sm
+docker network create demo
+docker run -d --name db --network demo -e POSTGRES_USER=… -e POSTGRES_PASSWORD=… \
+  -v pgdata:/var/lib/postgresql/data postgres:16-alpine
+docker run -d --name api --network demo -p 8000:8000 -e DATABASE_URL=… \
+  -v ./app:/code/app notes:v2.1 uvicorn … --reload
+```
+
+- Every flag lives in someone’s shell history — nothing is versioned, reviewed, or shared
+- Startup order, restart behavior, cleanup: all manual, all forgettable
+- The fix is **Docker Compose**: the whole stack in one committed file, `up` / `down` as single commands — that’s the follow-up workshop
+
+---
+
+## | Debugging & ops
+@hero
+@eyebrow Section 4
+
+The toolbox for when it breaks — and it will break (on purpose).
+
+---
+## 4 · Debugging & ops | The debugging toolbox
+
+| command | question it answers |
+|---|---|
+| docker ps -a | what’s running — and what *died* (exit codes!) |
+| docker logs -f --tail 100 api | what did it say before it died |
+| docker exec -it api bash | let me look around inside <span class="muted">(sh if bash is missing)</span> |
+| docker inspect api | full config: env, mounts, network, IP — everything |
+| docker stats | live CPU/memory — who’s eating the laptop |
+
+~ Debugging order: `ps -a` → `logs` → `exec` → `inspect`. It resolves 95% of container issues.
+
+---
+## 4 · Debugging & ops | The deeper toolbox
+@eyebrow 4 · Debugging & ops · deep dive
+
+| command | when you need it |
+|---|---|
+| docker run -it --entrypoint sh IMAGE | container dies instantly? skip its CMD and look around the image yourself |
+| docker logs --since 10m --timestamps api | just the recent window, with times — not 3 days of scrollback |
+| docker cp api:/code/app/main.py . | pull any file out — works on **stopped** containers too |
+| docker diff api | every file the container changed vs its image — spot rogue writes |
+| docker top api | the processes inside, without exec'ing in |
+| docker inspect -f '{{.State.ExitCode}}' api | one field, scriptable — Go templates beat piping to grep |
+| docker events --since 10m | the daemon's own feed: OOM kills, restarts, dies — things logs never show |
+
+~ The first row is the underrated one: when a container won’t even start, debug the *image* instead of the corpse.
+
+---
+## 4 · Debugging & ops | Failure bestiary
+
+:::card !bad port is already allocated
+Something owns that host port. `docker ps` for a forgotten container, `lsof -i :8000` for a host process. Or just map another port.
+:::
+:::card !bad Exited (1) immediately
+App crashed on boot. `docker logs <id>` — the answer is always there. Often: bad env var, missing file, wrong CMD.
+:::
+:::card !bad Exited (137) / OOMKilled
+137 = SIGKILL, usually the kernel enforcing a memory limit. Check `docker inspect` → OOMKilled, raise the limit or fix the leak.
+:::
+:::card !bad connection refused to db
+Wrong host (`localhost` instead of the other container's name), db not accepting connections yet, or the containers sit on different networks.
+:::
+
+---
+## 4 · Debugging & ops | Limits & disk space
+
+:::cols
+### Resource limits
+```sm
+$ docker run --memory 512m --cpus 1.5 …
+$ docker update --memory 512m api   # adjust a RUNNING container
+$ docker stats                      # verify what's enforced
+```
+Unlimited by default — one leaky container can starve the machine. Limits also make prod behavior reproducible locally (Compose and orchestrators expose the same knobs).
+|||
+### “Docker ate my disk”
+```sm
+$ docker system df    # who's guilty
+$ docker system prune  # stopped containers,
+                       # dangling images, caches
+$ docker system prune -a --volumes
+  # ⚠ nukes unused images AND volumes
+```
+Old images and build cache accumulate for months. Prune periodically; read what `-a --volumes` will delete before saying yes.
+:::
+
+---
+## 4 · Debugging & ops | Break it, then find it
+@demo LIVE DEMO 4
+
+```
+# sabotage the stack from demo 3 (openly — "I'm the intern now"):
+$ docker rm -f api && docker run -d --name api --network demo -p 8000:8000 \
+    -e DATABASE_URL=postgresql://workshop:[[WRONG]]@db:5432/notes notes:v2.1
+$ curl localhost:8000/health  # 503 — database unreachable
+$ docker ps                   # both "Up". the picture lies
+$ docker logs api             # ← "password authentication failed". there it is
+$ docker exec -it api sh      # env | grep DATABASE — the value it REALLY got
+$ docker inspect api          # …or the same truth from outside
+# fix: recreate api with the right password → /health is ok again
+
+# bonus round: occupy the port first
+$ python3 -m http.server 8000 &
+$ docker run -p 8000:8000 …   # "port is already allocated"
+$ kill %1
+# cleanup: docker rm -f api db && docker network rm demo
+```
+
+~ Same playbook every time: **status → logs → exec → inspect**.
+
+---
+## | What you take home
+@eyebrow Recap
+
+:::card <span class="accent">1</span> · Fundamentals
+A container is a **process with isolation**, not a small server — it borrows the host kernel, runs your app as PID 1, and is disposable by design. The only slow part of `docker run` is the pull.
+:::
+:::card <span class="accent">2</span> · Building images
+An image is **cached layers** (just tarballs + JSON). Order instructions **least → most changing**, sync deps from the lockfile before copying code, multi-stage so tooling never ships. `dive` when in doubt.
+:::
+:::card <span class="accent">3</span> · Docker run in practice
+Four flags carry a real stack: `-p` publishes, `-e` configures (never bake config in), `-v` persists — **code in bind mounts, state in volumes** — and `--network` lets containers find each other **by name**.
+:::
+:::card <span class="accent">4</span> · Debugging
+One playbook, always in this order: **`ps` → `logs` → `exec` → `inspect`**. Exit 137 = out of memory, "port allocated" = something else owns it, and `docker system prune` when disk fills.
+:::
+
+> If you remember one thing
+> Ship the environment, not install instructions — and when it breaks, the answer is already in `docker logs`.
+
+~ Everything from today — slides, demo app, all Dockerfiles, cheat sheet — is in the workshop repo: `git clone` and replay it. Next up: **Docker Compose**, where the by-hand stack becomes one committed file.
+
+---
+## | Questions?
+@hero
+@eyebrow Fin
+
+Then go containerize something.
+</script>
+
+<style>
+  :root {
+    --bg: #0D1520;
+    --surface: #152232;
+    --surface-2: #1C2C40;
+    --line: #24384F;
+    --ink: #E9EEF4;
+    --muted: #8CA0B4;
+    --accent: #4CC2FF;
+    --warm: #FFB454;
+    --good: #7CE38B;
+    --bad: #FF7B72;
+    --display: 'Sora', 'Avenir Next', 'Trebuchet MS', sans-serif;
+    --body: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: clamp(16px, 1.6vw, 22px);
+    line-height: 1.55;
+    overflow: hidden;
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 4.5vh 6vw 7vh;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7em;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1.2em;
+  }
+  h1, h2 {
+    font-family: var(--display);
+    text-wrap: balance;
+    line-height: 1.15;
+    margin: 0 0 0.5em;
+  }
+  h1 { font-size: 2.9em; font-weight: 700; }
+  h2 { font-size: 1.9em; font-weight: 600; }
+  h3 {
+    font-family: var(--display);
+    font-size: 1em;
+    font-weight: 600;
+    margin: 0 0 0.4em;
+  }
+  p, li { max-width: 46em; }
+  p { margin: 0.5em 0; }
+  ul { padding-left: 1.1em; margin: 0.4em 0; }
+  li { margin: 0.45em 0; }
+  li::marker { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+  .good { color: var(--good); }
+  .warm { color: var(--warm); }
+  .bad { color: var(--bad); }
+  strong { color: var(--ink); font-weight: 600; }
+
+  .hero { margin: auto 0; }
+  .hero p { font-size: 1.15em; color: var(--muted); }
+  .hero p.muted { margin-top: 3em; font-family: var(--mono); font-size: 0.8em; }
+
+  code, .term {
+    font-family: var(--mono);
+    font-size: 0.85em;
+  }
+  code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+    white-space: nowrap;
+  }
+  .term {
+    background: #0A111B;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 1em 1.2em;
+    margin: 0.8em 0;
+    overflow-x: auto;
+    width: fit-content;
+    min-width: min(36em, 100%);
+    max-width: 100%;
+  }
+  .term.sm { font-size: 0.78em; }
+  .term pre { margin: 0; line-height: 1.7; }
+  .term .p { color: var(--good); user-select: none; }
+  .term .c { color: var(--muted); }
+  .term .hl { color: var(--warm); }
+
+  .cols { display: flex; gap: 3vw; align-items: flex-start; flex-wrap: wrap; }
+  .cols > div { flex: 1 1 20em; min-width: 0; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1em 1.3em;
+    margin: 0.6em 0;
+  }
+  .card p { font-size: 0.85em; margin: 0.4em 0 0; }
+  .card .term { margin: 0; }
+
+  .gotcha {
+    border-left: 3px solid var(--warm);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 0.8em 1.2em;
+    margin-top: 1.2em;
+    max-width: 54em;
+  }
+  .gotcha .tag {
+    font-family: var(--mono);
+    font-size: 0.7em;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--warm);
+  }
+  .gotcha p { margin: 0.3em 0 0; }
+
+  .demo-slide { justify-content: center; }
+  .demo-badge {
+    display: inline-block;
+    align-self: flex-start;
+    font-family: var(--mono);
+    font-size: 0.75em;
+    color: var(--bg);
+    background: var(--good);
+    border-radius: 999px;
+    padding: 0.2em 1em;
+    margin-bottom: 1em;
+    letter-spacing: 0.1em;
+  }
+
+  table {
+    border-collapse: collapse;
+    margin: 0.8em 0;
+    font-size: 0.9em;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55em 1.1em;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.75em;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  td:first-child { color: var(--accent); font-family: var(--mono); font-size: 0.9em; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; max-width: 100%; }
+
+  svg text { font-family: var(--body); fill: var(--ink); }
+  svg .lbl { font-size: 13px; }
+  svg .sm { font-size: 11px; fill: #8CA0B4; }
+
+  #hud {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6em 2em;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  #bar {
+    position: fixed;
+    bottom: 0; left: 0;
+    height: 3px;
+    background: var(--accent);
+    transition: width 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
+  .kbd-hint { opacity: 0.7; }
+</style>
+
+<div id="hud">
+  <span id="section-label"></span>
+  <span><span id="counter"></span> &nbsp;·&nbsp; <span class="kbd-hint">← → navigate</span></span>
+</div>
+<div id="bar"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function inline(s) {
+    var codes = [];
+    s = s.replace(/`([^`]+)`/g, function (m, c) {
+      codes.push('<code>' + esc(c) + '</code>');
+      return '\u0000' + (codes.length - 1) + '\u0000';
+    });
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    return s.replace(/\u0000(\d+)\u0000/g, function (m, i) { return codes[+i]; });
+  }
+
+  function renderTerm(lines, cls) {
+    var html = lines.map(function (l) {
+      var e = esc(l);
+      e = e.replace(/\[\[(.+?)\]\]/g, '<span class="hl">$1</span>');
+      e = e.replace(/(^|\s)(#.*)$/, function (m, sp, c) { return sp + '<span class="c">' + c + '</span>'; });
+      e = e.replace(/^\$(\s)/, '<span class="p">$$</span>$1');
+      return e;
+    }).join('\n');
+    return '<div class="term' + (cls ? ' ' + cls : '') + '"><pre>' + html + '</pre></div>';
+  }
+
+  // collect lines of a ::: block (lines[i] is the opener); returns [buf, nextIndex]
+  function collect(lines, i) {
+    var buf = [], depth = 1;
+    i++;
+    while (i < lines.length && depth > 0) {
+      var t = lines[i];
+      if (/^:::\S/.test(t)) depth++;
+      else if (t.trim() === ':::') { depth--; if (depth === 0) { i++; break; } }
+      buf.push(t);
+      i++;
+    }
+    return [buf, i];
+  }
+
+  function splitCols(buf) {
+    var cols = [[]], depth = 0;
+    buf.forEach(function (t) {
+      if (/^:::\S/.test(t)) depth++;
+      else if (t.trim() === ':::') depth--;
+      if (t.trim() === '|||' && depth === 0) cols.push([]);
+      else cols[cols.length - 1].push(t);
+    });
+    return cols;
+  }
+
+  function renderTable(rows) {
+    var html = '<div class="table-wrap"><table>';
+    var isSep = function (r) { return /^\|[\s\-:|]+\|?\s*$/.test(r); };
+    var hasHeader = rows.length > 1 && isSep(rows[1]);
+    rows.forEach(function (r, idx) {
+      if (isSep(r)) return;
+      var tag = (hasHeader && idx === 0) ? 'th' : 'td';
+      var cells = r.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|');
+      html += '<tr>' + cells.map(function (c) {
+        return '<' + tag + '>' + inline(c.trim()) + '</' + tag + '>';
+      }).join('') + '</tr>';
+    });
+    return html + '</table></div>';
+  }
+
+  function parseBlocks(lines) {
+    var out = '', i = 0;
+    while (i < lines.length) {
+      var l = lines[i];
+
+      if (/^```/.test(l)) {
+        var cls = l.slice(3).trim(), buf = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out += renderTerm(buf, cls);
+      } else if (/^:::html/.test(l)) {
+        var r = collect(lines, i);
+        out += r[0].join('\n');
+        i = r[1];
+      } else if (/^:::cols/.test(l)) {
+        var rc = collect(lines, i);
+        i = rc[1];
+        out += '<div class="cols">' + splitCols(rc[0]).map(function (col) {
+          return '<div>' + parseBlocks(col) + '</div>';
+        }).join('') + '</div>';
+      } else if (/^:::card/.test(l)) {
+        var head = l.slice(7).trim(), hcls = '';
+        var m = head.match(/^!(\w+)\s+/);
+        if (m) { hcls = ' class="' + m[1] + '"'; head = head.slice(m[0].length); }
+        var rk = collect(lines, i);
+        i = rk[1];
+        out += '<div class="card"><h3' + hcls + '>' + inline(head) + '</h3>' + parseBlocks(rk[0]) + '</div>';
+      } else if (/^>\s/.test(l)) {
+        var gb = [];
+        while (i < lines.length && /^>/.test(lines[i])) gb.push(lines[i++].replace(/^>\s?/, ''));
+        out += '<div class="gotcha"><span class="tag">' + inline(gb[0]) + '</span><p>' +
+          inline(gb.slice(1).join(' ')) + '</p></div>';
+      } else if (/^\|/.test(l)) {
+        var tb = [];
+        while (i < lines.length && /^\|/.test(lines[i])) tb.push(lines[i++]);
+        out += renderTable(tb);
+      } else if (/^- /.test(l)) {
+        var li = [];
+        while (i < lines.length && /^- /.test(lines[i])) li.push(lines[i++].slice(2));
+        out += '<ul>' + li.map(function (x) { return '<li>' + inline(x) + '</li>'; }).join('') + '</ul>';
+      } else if (/^### /.test(l)) {
+        out += '<h3>' + inline(l.slice(4)) + '</h3>';
+        i++;
+      } else if (/^~\s/.test(l)) {
+        out += '<p class="muted">' + inline(l.replace(/^~\s/, '')) + '</p>';
+        i++;
+      } else if (l.trim() === '') {
+        i++;
+      } else {
+        var pb = [];
+        while (i < lines.length && lines[i].trim() !== '' && !/^(```|:::|[->~#|]|## )/.test(lines[i])) {
+          pb.push(lines[i++]);
+        }
+        if (pb.length === 0) { i++; continue; }
+        out += '<p>' + inline(pb.join(' ')) + '</p>';
+      }
+    }
+    return out;
+  }
+
+  function renderSlide(txt) {
+    var lines = txt.split('\n');
+    var section = '', title = '', hero = false, demo = '', eyebrow = null;
+    var rest = [];
+    lines.forEach(function (l) {
+      if (/^## /.test(l) && !title) {
+        var h = l.slice(3), p = h.indexOf('|');
+        section = h.slice(0, p).trim();
+        title = h.slice(p + 1).trim();
+      } else if (/^@hero\s*$/.test(l)) hero = true;
+      else if (/^@demo /.test(l)) demo = l.slice(6).trim();
+      else if (/^@eyebrow /.test(l)) eyebrow = l.slice(9).trim();
+      else rest.push(l);
+    });
+    var body = parseBlocks(rest);
+    var inner;
+    if (demo) {
+      inner = '<div class="demo-badge">' + esc(demo) + '</div><h2>' + inline(title) + '</h2>' + body;
+    } else if (hero) {
+      inner = '<div class="hero">' +
+        (eyebrow ? '<div class="eyebrow">' + inline(eyebrow) + '</div>' : '') +
+        '<h1>' + inline(title) + '</h1>' + body + '</div>';
+    } else {
+      inner = '<div class="eyebrow">' + inline(eyebrow || section) + '</div><h2>' + inline(title) + '</h2>' + body;
+    }
+    var sec = document.createElement('section');
+    sec.className = 'slide' + (demo ? ' demo-slide' : '');
+    sec.dataset.section = section;
+    sec.innerHTML = inner;
+    return sec;
+  }
+
+  // split the deck source into slides on standalone "---" lines (outside fences)
+  var raw = document.getElementById('deck').textContent;
+  var parts = [], cur = [], fence = false;
+  raw.split('\n').forEach(function (l) {
+    if (/^```/.test(l)) fence = !fence;
+    if (l.trim() === '---' && !fence) { parts.push(cur.join('\n')); cur = []; }
+    else cur.push(l);
+  });
+  parts.push(cur.join('\n'));
+
+  var hud = document.getElementById('hud');
+  var slides = parts
+    .filter(function (p) { return p.trim() !== ''; })
+    .map(function (p) {
+      var sec = renderSlide(p);
+      document.body.insertBefore(sec, hud);
+      return sec;
+    });
+
+  var counter = document.getElementById('counter');
+  var label = document.getElementById('section-label');
+  var bar = document.getElementById('bar');
+  var i = 0;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function (s, k) { s.classList.toggle('active', k === i); });
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    label.textContent = slides[i].dataset.section || 'Docker for the Team';
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+  }
+
+  var lastNav = 0;
+  function step(delta) {
+    // Key auto-repeat and double-fired events arrive within a few ms of the
+    // original press; one deliberate keystroke = one slide.
+    var now = Date.now();
+    if (now - lastNav < 120) return;
+    lastNav = now;
+    show(i + delta);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'ArrowDown', ' ', 'PageDown'].indexOf(e.key) !== -1) { e.preventDefault(); step(1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].indexOf(e.key) !== -1) { e.preventDefault(); step(-1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+  });
+  var fromHash = parseInt(location.hash.slice(1), 10);
+  show(isNaN(fromHash) ? 0 : fromHash - 1);
+})();
+</script>
