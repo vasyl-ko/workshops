@@ -1,0 +1,66 @@
+# Base file — the committed contract, prod-shaped: no bind mounts, no reload.
+# Dev conveniences live in compose.override.yaml, which `docker compose up`
+# merges in automatically when present.
+
+# Pin the project name: containers demo-api-1, network demo_default, volume
+# demo_pgdata — whatever the folder is called. (-p / COMPOSE_PROJECT_NAME still win.)
+name: demo
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile   # target: runtime (the default) — the override picks `dev`
+    image: notes:compose       # build + image: the name the built image gets; `migrate` reuses it
+    ports:
+      - "${API_PORT:-8000}:8000"   # from .env when present, else 8000
+    environment:
+      # "db" is the service name — Docker's internal DNS resolves it. No IPs, ever.
+      # The password comes from .env when present (see .env.example); the
+      # :-workshop fallback keeps `git clone && docker compose up` working.
+      DATABASE_URL: postgresql://workshop:${POSTGRES_PASSWORD:-workshop}@db:5432/notes
+    depends_on:
+      migrate:
+        # The third condition: a one-shot job must have EXITED 0 before we start.
+        condition: service_completed_successfully
+    healthcheck:
+      # The slim image has no curl; Python is always there. /health also pings the db.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  migrate:
+    # Same image as api, different command, exits when done. Idempotent: Compose
+    # re-runs it on every `up`. Schema changes are a job, not app startup.
+    image: notes:compose
+    command: python -m app.migrate
+    environment:
+      DATABASE_URL: postgresql://workshop:${POSTGRES_PASSWORD:-workshop}@db:5432/notes
+    depends_on:
+      db:
+        # "started" is not "ready": wait for db's healthcheck, not its process.
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      # Gotcha: these only apply when the data volume is EMPTY (first start).
+      # Changing the password later needs `docker compose down -v`.
+      POSTGRES_USER: workshop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workshop}
+      POSTGRES_DB: notes
+    volumes:
+      # Named volume: data survives `docker compose down` and container rebuilds.
+      # Compose names it after the project: demo_pgdata.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workshop -d notes"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 10s   # first boot runs initdb; failures in this window don't count
+
+volumes:
+  pgdata:

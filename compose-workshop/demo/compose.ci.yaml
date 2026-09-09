@@ -1,0 +1,9 @@
+# CI: the base contract plus the test-capable image. No bind mounts, no reload,
+# no Adminer — explicit -f skips the override entirely:
+#   docker compose -f compose.yaml -f compose.ci.yaml up -d --build --wait
+#   docker compose -f compose.yaml -f compose.ci.yaml run --rm api pytest
+#   docker compose -f compose.yaml -f compose.ci.yaml down -v
+services:
+  api:
+    build:
+      target: dev

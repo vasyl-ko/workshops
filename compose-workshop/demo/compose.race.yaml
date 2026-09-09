@@ -1,0 +1,14 @@
+# Opt-in "started ≠ ready" demo. NOT loaded automatically — pass it explicitly:
+#   docker compose -f compose.yaml -f compose.override.yaml -f compose.race.yaml up
+# It pretends the database boots slowly (big data dir, crash recovery, a
+# migration) and swaps the api's health gate for a plain "process started",
+# so the api connects too early and crashes.
+# `!override` replaces the whole depends_on map instead of merging into it
+# (Compose >= 2.24.4) — a merge would keep the api -> migrate -> healthy db chain.
+services:
+  db:
+    entrypoint: ["sh", "-c", "sleep 5 && exec docker-entrypoint.sh postgres"]
+  api:
+    depends_on: !override
+      db:
+        condition: service_started   # only waits for the PROCESS, not readiness

@@ -1,0 +1,32 @@
+# Dev-only extras, merged automatically by `docker compose up`.
+# Merge rules: maps merge, lists append (keyed lists like ports/volumes merge
+# on their target), scalars and `command` replace — so this ADDS the bind
+# mount and REPLACES the command with the auto-reload variant.
+services:
+  api:
+    build:
+      target: dev              # same Dockerfile, the stage with pytest + tests
+    volumes:
+      # Bind mount: your editor saves a file, the container sees it instantly.
+      - ./app:/code/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    develop:
+      # `docker compose up --watch`: the bind mount handles code; watch handles
+      # what a bind mount can't — rebuild the image when dependencies change.
+      watch:
+        - path: pyproject.toml
+          action: rebuild
+        - path: uv.lock
+          action: rebuild
+
+  # Optional tooling behind a profile: skipped unless you ask for it with
+  # `docker compose --profile tools up`. Browse the db at http://localhost:8080
+  # (System: PostgreSQL, Server: db, User: workshop, Database: notes).
+  adminer:
+    image: adminer
+    profiles: ["tools"]
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
